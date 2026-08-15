@@ -5,7 +5,7 @@ set -e
 BUILD_DIR="build"
 
 echo "==> Cleaning..."
-rm -rf "$BUILD_DIR"
+#rm -rf "$BUILD_DIR"
 
 echo "==> Configuring..."
 
