@@ -385,21 +385,25 @@ public:
         double refillRate)
         : _capacity(capacity),
           _refillRate(refillRate),
-          _state(State{
-              static_cast<double>(capacity),
-              Clock::now()})
+          _state({static_cast<double>(capacity),
+                  Clock::now()})
     {
     }
 
     bool allow()
     {
-        const auto now = Clock::now();
 
+        // No need to be inside the CAS loop because there is no risk of
+        // using a stale state. On CAS failure, compare_exchange_weak()
+        // updates oldState with the latest state, and we recalculate based
+        // on that.
         State oldState =
             _state.load(std::memory_order_relaxed);
 
         while (true)
         {
+            const auto now = Clock::now();
+
             // Calculate elapsed time since the last refill.
             const std::chrono::duration<double> elapsed =
                 now - oldState._lastRefill_tp;
@@ -422,6 +426,9 @@ public:
                     now
                 };
 
+                //The atomic state itself provides the required atomicity and modification ordering. 
+                //We don't need release/acquire synchronization because the state isn't being used to publish other non-atomic
+                //data to another thread. Each thread only needs to atomically load the latest state and use CAS to update it.
                 if (_state.compare_exchange_weak(
                         oldState,
                         newState,
@@ -444,7 +451,7 @@ public:
             if (_state.compare_exchange_weak(
                     oldState,
                     newState,
-                    std::memory_order_relaxed,
+                    std::memory_order_relaxed, // Same reason as above, we don't need release/acquire synchronization here.
                     std::memory_order_relaxed))
             {
                 return true;
